@@ -50,6 +50,8 @@ Mike Field [hamster@snap.net.nz] 15 Oct 2012
 #include "progalgspi.h"
 #include "bitfile.h"
 
+// Read file to buffer
+static uint8_t* get_file(const char* fileName, uint32_t &size);
 
 unsigned int get_id(Jtag &jtag, DeviceDB &db, int chainpos, bool verbose)
 {
@@ -373,8 +375,20 @@ int main(int argc, char **argv)
                 return 0;
             }
             BitFile fpga_bit;
+#if 0
             fpga_bit.readFile(cFpga_fn);
-
+#else
+            {
+                uint32_t size;
+                uint8_t* buf = get_file(cFpga_fn, size);
+                if(!buf) {
+                    fprintf(stderr, "Can't read file: %s\n", cFpga_fn);
+                    return 1;
+                }
+                fpga_bit.readBuff(buf, size);
+                delete[] buf;
+            }
+#endif
             if(append_str && !append_data(fpga_bit, append_str, append_flip, verbose)) /* Try to append data */
                 return 1;
 
@@ -390,4 +404,23 @@ int main(int argc, char **argv)
         fprintf(stderr, "IOException: %s\n", e.getMessage().c_str());
         return  1;
     }
+}
+
+uint8_t* get_file(const char* fileName, uint32_t &size) {
+    FILE* fd;
+    if(!(fd = fopen(fileName, "rb"))) {
+        return nullptr;
+    }
+    // get file size
+    fseek(fd, 0, SEEK_END);
+    size = ftell(fd);
+    fseek(fd, 0, SEEK_SET);
+    uint8_t *buf = new uint8_t[size];
+    // read file
+    if(fread(buf, size, 1, fd) != 1) {
+        delete[] buf;
+        return nullptr;
+    }
+    fclose(fd);
+    return buf;
 }

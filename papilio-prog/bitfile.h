@@ -21,7 +21,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA */
 #ifndef BITFILE_H
 #define BITFILE_H
 
-#include <stdio.h>
 #include <string>
 
 // ----------------------Xilinx .bit file format---------------------------
@@ -92,6 +91,9 @@ private:
     void readField(std::string &field, FILE *fp);
     void processData(FILE *fp, bool flip);
 
+    void readField(std::string &field, const uint8_t* &buf, uint32_t &size);
+    void processData(const uint8_t* &buf, uint32_t &size, bool flip);
+
 public:
     BitFile();
     ~BitFile();
@@ -101,6 +103,8 @@ public:
     void append(unsigned long  val, unsigned cnt);
     void append(char const *file, bool flip=true);
     void readFile(char const *fname, bool flip=true);
+
+    void readBuff(const void* buff, uint32_t size, bool flip = true);
 
 public:
     inline byte *getData(){return buffer;}

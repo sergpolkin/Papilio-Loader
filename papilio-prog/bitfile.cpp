@@ -28,12 +28,14 @@ Mike FIeld [hamster@snap.net.nz] 15 Oct 2012
 #include "bitfile.h"
 #include "io_exception.h"
 
-#include <sys/types.h>
+#include <cstdio>
+#include <cstring>
 #include <sys/stat.h>
-#include <unistd.h>
-#include <errno.h>
-#include <string.h>
-#include <stdio.h>
+
+#define BYTESWAP16(n) (((n&0xFF00)>>8)|((n&0x00FF)<<8))
+#define BYTESWAP32(n) \
+    ((BYTESWAP16((n&0xFFFF0000)>>16)) | \
+    ((BYTESWAP16(n&0x0000FFFF))<<16))
 
 using namespace std;
 
@@ -52,7 +54,64 @@ void BitFile::print()
     printf("Created: %s %s\n",getDate(),getTime());
     printf("Bitstream length: %lu bits\n", getLength());
 }
+// Read buffer
+void BitFile::readBuff(const void* buff, uint32_t size, bool flip) {
+    auto cur = reinterpret_cast<const uint8_t*>(buff);
+    // Skip the header
+    cur += 13;
+    size -= 13;
 
+    char         key;
+    std::string *field;
+    while (size > 0) {
+        key = *cur++;
+        size -= 1;
+        switch (key) {
+            case 'a': field = &ncdFilename; break;
+            case 'b': field = &partName;    break;
+            case 'c': field = &date;        break;
+            case 'd': field = &time;        break;
+            case 'e':
+                processData(cur, size, flip);
+                return;
+            default:
+                throw io_exception("Unknown field");
+            break;
+        }
+        readField(*field, cur, size);
+    }
+}
+// Read field
+void BitFile::readField(std::string &field, const uint8_t* &buf, uint32_t &size) {
+    uint16_t fieldSize;
+    fieldSize = *reinterpret_cast<const uint16_t*>(buf);
+    fieldSize = BYTESWAP16(fieldSize);
+    buf += 2;
+    size -= 2;
+    field = reinterpret_cast<const char*>(buf);
+    buf += fieldSize;
+    size -= fieldSize;
+}
+void BitFile::processData(const uint8_t* &buf, uint32_t &size, bool flip) {
+    length = *reinterpret_cast<const uint32_t*>(buf);
+    length = BYTESWAP32(length);
+    buf += 4;
+    size -= 4;
+    if (length > size) {
+        throw io_exception("Buffer size not match");
+    }
+    if (buffer) delete[] buffer;
+    buffer = new byte[length];
+    for (uint32_t i = 0; i < length; ++i) {
+        byte b;
+        b = *buf++;
+        size -= 1;
+        buffer[i] = (flip ? bitRevTable[b] : b); // Reverse the bit order.
+    }
+    if (size != 0) {
+        error("Ignoring extra data at end of buffer");
+    }
+}
 // Read in file
 void BitFile::readFile(char const * fname, bool flip)
 {
